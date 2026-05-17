@@ -1,4 +1,4 @@
-taf-mmseqs2 18-r1
+taf-mmseqs2 18-r2
 
 TAFFISH wrapper for MMseqs2, an ultra-fast sequence search, clustering, and
 taxonomy suite for protein and nucleotide datasets.
@@ -77,6 +77,9 @@ Notes:
   - The image includes official CPU binaries. On linux/amd64 it dispatches to
     AVX2, SSE4.1, or SSE2 at runtime; on linux/arm64 it uses the official ARM64
     binary.
+  - This r2 image keeps the same upstream MMseqs2 release as r1, but uses a
+    smaller Alpine runtime after confirming the official binaries are static.
+    Remote database workflows use the included curl/wget/xargs download path.
   - GPU archives from upstream release 18-8cc5c are not bundled in this CPU
     image. GPU workflows require a GPU-specific build and container backend GPU
     runtime options.
@@ -88,7 +91,7 @@ Notes:
     require substantial temporary disk space and memory.
 
 Container:
-  image: ghcr.io/taffish/mmseqs2:18-r1
+  image: ghcr.io/taffish/mmseqs2:18-r2
   supported backends: apptainer, podman, docker
   supported platforms: linux/amd64, linux/arm64
   upstream release: 18-8cc5c
