@@ -1,2 +1,2 @@
-<taf-app:container:ghcr.io/taffish/mmseqs2:18-r2>
+<taf-app:container:ghcr.io/taffish/mmseqs2:18-r3>
 mmseqs ::*ARGV*::

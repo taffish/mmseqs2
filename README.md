@@ -3,9 +3,13 @@
 TAFFISH wrapper for [MMseqs2](https://github.com/soedinglab/MMseqs2), an ultra-fast sequence search, clustering, and taxonomy suite for protein and nucleotide datasets.
 
 This repository packages upstream MMseqs2 release `18-8cc5c` as the TAFFISH
-package version `18-r2`. The short TAFFISH version keeps package names stable
+package version `18-r3`. The short TAFFISH version keeps package names stable
 and readable, while the Dockerfile, upstream metadata, and smoke tests pin the
 exact upstream release tag and binary commit.
+
+Release `18-r3` is a help-only TAFFISH update. It keeps the upstream software,
+Dockerfile, runtime dependencies, smoke tests, and command behavior unchanged
+from `18-r2`, and refreshes the terminal `taf-mmseqs2 --help` text.
 
 ## Installation
 
@@ -19,7 +23,7 @@ taf install mmseqs2
 Install the exact release:
 
 ```sh
-taf install mmseqs2 18-r2
+taf install mmseqs2 18-r3
 ```
 
 For local testing before the app is published to the public index:
@@ -132,9 +136,9 @@ form even though they are not expanded in the common examples above.
 ```text
 name: mmseqs2
 command: taf-mmseqs2
-version: 18-r2
+version: 18-r3
 kind: tool
-image: ghcr.io/taffish/mmseqs2:18-r2
+image: ghcr.io/taffish/mmseqs2:18-r3
 upstream release: 18-8cc5c
 upstream binary commit: 8cc5ce367b5638c4306c2d7cfc652dd099a4643f
 ```
@@ -144,7 +148,7 @@ upstream binary commit: 8cc5ce367b5638c4306c2d7cfc652dd099a4643f
 The container image is built from `docker/Dockerfile`. It starts from
 `alpine:3.20`, downloads official static MMseqs2 release binaries from GitHub,
 and verifies every downloaded archive with the upstream GitHub release sha256
-digests. Release `18-r2` keeps the same upstream MMseqs2 release as `18-r1`,
+digests. Release `18-r3` keeps the same upstream MMseqs2 release as `18-r1`,
 but rebuilds the runtime layer on Alpine to reduce image size after confirming
 that the official binaries do not need glibc dynamic libraries.
 
@@ -245,11 +249,11 @@ Useful checks before publishing:
 taf check
 taf compile -- mmseqs version
 taf publish --release --dry-run
-docker build -t ghcr.io/taffish/mmseqs2:18-r2 -f docker/Dockerfile .
-docker build --platform linux/amd64 -t ghcr.io/taffish/mmseqs2:18-r2-amd64-test -f docker/Dockerfile .
-docker build --platform linux/arm64 -t ghcr.io/taffish/mmseqs2:18-r2-arm64-test -f docker/Dockerfile .
-docker run --rm ghcr.io/taffish/mmseqs2:18-r2 mmseqs version
-docker run --rm ghcr.io/taffish/mmseqs2:18-r2 mmseqs easy-search
+docker build -t ghcr.io/taffish/mmseqs2:18-r3 -f docker/Dockerfile .
+docker build --platform linux/amd64 -t ghcr.io/taffish/mmseqs2:18-r3-amd64-test -f docker/Dockerfile .
+docker build --platform linux/arm64 -t ghcr.io/taffish/mmseqs2:18-r3-arm64-test -f docker/Dockerfile .
+docker run --rm ghcr.io/taffish/mmseqs2:18-r3 mmseqs version
+docker run --rm ghcr.io/taffish/mmseqs2:18-r3 mmseqs easy-search
 ```
 
 The repository wrapper files are licensed under Apache-2.0. Upstream MMseqs2
