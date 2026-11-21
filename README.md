@@ -1,261 +1,291 @@
 # taf-mmseqs2
 
-TAFFISH wrapper for [MMseqs2](https://github.com/soedinglab/MMseqs2), an ultra-fast sequence search, clustering, and taxonomy suite for protein and nucleotide datasets.
+[MMseqs2 Release 19](https://github.com/soedinglab/MMseqs2/releases/tag/19-ab57c)
+for TAFFISH: tool `mmseqs`, wrapper `taf-mmseqs2`, package `19-r1`,
+image `ghcr.io/taffish/mmseqs2:19-r1`. CPU Linux amd64 and arm64.
+The optional `mmseqs2-db` helper prepares independently versioned shared references;
+ordinary local analysis does not need a shared library.
 
-This repository packages upstream MMseqs2 release `18-8cc5c` as the TAFFISH
-package version `18-r3`. The short TAFFISH version keeps package names stable
-and readable, while the Dockerfile, upstream metadata, and smoke tests pin the
-exact upstream release tag and binary commit.
+## Install and run
 
-Release `18-r3` is a help-only TAFFISH update. It keeps the upstream software,
-Dockerfile, runtime dependencies, smoke tests, and command behavior unchanged
-from `18-r2`, and refreshes the terminal `taf-mmseqs2 --help` text.
-
-## Installation
-
-Install from the public TAFFISH Hub index:
+After publication:
 
 ```sh
 taf update
-taf install mmseqs2
-```
-
-Install the exact release:
-
-```sh
-taf install mmseqs2 18-r3
-```
-
-For local testing before the app is published to the public index:
-
-```sh
-taf install --from .
-```
-
-## Usage
-
-Show TAFFISH app help:
-
-```sh
+taf install mmseqs2 19-r1
 taf-mmseqs2 --help
-```
-
-Show the TAFFISH package version:
-
-```sh
 taf-mmseqs2 --version
-```
-
-Show upstream MMseqs2 version:
-
-```sh
 taf-mmseqs2 mmseqs version
+taf-mmseqs2 mmseqs easy-search -h
 ```
 
-Show upstream command help:
+Before publication, maintainers can install this checkout with `taf install --from .`.
+Wrapper flags `--help`, `--version`, `--compile` belong to TAFFISH.
+In command mode the first positional word is the executable: use
+`taf-mmseqs2 mmseqs easy-search ...`, not `taf-mmseqs2 easy-search ...`.
 
 ```sh
-taf-mmseqs2 mmseqs
-taf-mmseqs2 mmseqs easy-search
-taf-mmseqs2 mmseqs createdb
+taf-mmseqs2 mmseqs easy-search query.faa target.faa hits.tsv tmp-search --threads 4
+taf-mmseqs2 mmseqs easy-cluster sequences.faa clusters tmp-cluster --threads 4
+taf-mmseqs2 mmseqs easy-linclust sequences.faa linclusters tmp-lin --threads 4
+taf-mmseqs2 mmseqs easy-rbh query.faa target.faa reciprocal.tsv tmp-rbh --threads 4
+taf-mmseqs2 mmseqs createdb query.faa queryDB
+taf-mmseqs2 mmseqs createdb target.faa targetDB
+taf-mmseqs2 mmseqs search queryDB targetDB resultDB tmp-db --threads 4
+taf-mmseqs2 mmseqs convertalis queryDB targetDB resultDB hits.tsv
+taf-mmseqs2 mmseqs convert2fasta targetDB restored.faa
 ```
 
-Run an easy protein search directly from FASTA files:
+Inputs are protein/nucleotide FASTA/FASTQ or compatible MMseqs databases; compressed
+FASTA gzip/bzip2 input is supported. Choose upstream search parameters for the data.
+Default alignment TSV columns are query, target, identity, alignment length,
+mismatches, gap openings, query/target coordinates, E-value and bit score.
+Clustering writes `*_cluster.tsv`, `*_rep_seq.fasta` and `*_all_seqs.fasta`.
+Use fresh output paths: upstream can overwrite outputs. Temporary search/index
+files can be large; size RAM, threads and disk for the chosen analysis.
+Docker runs as your UID/GID; Podman additionally uses keep-id. Apptainer retains
+the invoking Linux user. Outputs therefore belong to the caller.
+
+TAFFISH command-mode shell reconstruction requires **literal quotes** inside
+arguments containing whitespace; outer shell quotes alone are not enough:
 
 ```sh
-taf-mmseqs2 mmseqs easy-search query.fa target.fa result.m8 tmp --threads 8 -s 5.7
+taf-mmseqs2 mmseqs easy-search "'query 1.faa'" "'target 1.faa'" "'hits 1.tsv'" "'tmp 1'" --threads 4
 ```
 
-Create and index a reusable target database:
+## Release 19 changes and compatibility
+
+Protein Linclust now defaults to upstream Linclust2. Results can differ from
+Release 18; use `--linclust-version 1` for the old algorithm. Nucleotide
+Linclust still uses version 1. Release 19 adds `cluster --cluster-version 2`,
+`easy-proteomecluster` / `easy-proteomesearch`, consensus representatives and BLAST database
+conversion; it changes CPU alignment/prefilter implementations and fixes several
+upstream issues. See the official release notes before comparing scientific runs.
+The obsolete `util/format_substitution_matrix.R` is replaced upstream by
+`calculatelambda`. This packaging does not change algorithms or choose scientific
+thresholds, taxonomic references or database versions.
+
+## Native offline HTML
 
 ```sh
-taf-mmseqs2 mmseqs createdb target.fa targetDB --threads 8
-taf-mmseqs2 mmseqs createindex targetDB tmp --threads 8
-taf-mmseqs2 mmseqs easy-search query.fa targetDB result.m8 tmp --threads 8
+taf-mmseqs2 mmseqs easy-search query.faa target.faa alignments.html tmp-html --format-mode 3 --threads 4
+taf-mmseqs2 mmseqs createtaxdb targetDB tmp-tax --ncbi-tax-dump taxonomy --tax-mapping-file mapping.tsv
+taf-mmseqs2 mmseqs easy-taxonomy query.faa targetDB classification tmp-taxonomy --threads 4 --report-mode 1
+cp classification_report classification.krona.html
 ```
 
-Cluster sequences:
+Open the alignment HTML or taxonomy Krona HTML in the **host browser**.
+The upstream taxonomy workflow names its report `classification_report` without
+an extension; the copy above gives the unchanged page a browser-friendly name.
+These are upstream-generated static visualizations with bundled assets, not a
+new TAFFISH report service. No port or GUI server is started. The independent
+[MMseqs2-App](https://github.com/soedinglab/MMseqs2-App) web/desktop companion is
+not called by these CLI workflows and is not included.
+
+The official Release 19 alignment exporter inserts sequence IDs into JavaScript
+without escaping. A quote can break the page and a script-ending name can inject
+markup. This build applies the reviewed [HTML-only patch](docker/patches/html-escape.patch):
+query and target names receive JSON/HTML-script encoding; long names are appended
+without the former fixed name buffer. Decoded labels are unchanged. Search scores,
+TSV, clustering, sequence storage and scientific code are unchanged. The same
+HTML-output patch also replaces Krona's fixed label buffer with a sized string:
+the upstream XML escaping is retained and long names no longer truncate or cause
+an out-of-bounds output read. Taxonomy assignments/counts are unchanged. Original
+source identity and the applied patch remain in the image. Do not treat arbitrary
+HTML from untrusted third parties as safe just because it has an MMseqs filename.
+
+## Resources and licenses
+
+Reference families (UniProt/UniRef, NCBI NR/NT/taxonomy, GTDB, Pfam and other
+upstream catalog entries) are selectable, often large and independently licensed.
+No family is downloaded by default or embedded in this image. The smallest
+reusable unit is an explicitly selected release's FASTA, complete prebuilt
+MMseqs file set, or matching taxonomy/mapping files. Mixing releases can change
+results. The helper never chooses a scientific resource or silently upgrades it.
+
+Use the provider's official release distribution and permission terms.
+[UniProt](https://www.uniprot.org/help/license) copyright content uses CC BY 4.0
+with its stated third-party-rights caveats; [NCBI policies](https://www.ncbi.nlm.nih.gov/home/about/policies/)
+do not remove possible third-party restrictions. Other catalog entries require
+their own license review. The upstream **software** MIT license does not license
+downloaded data. Do not store credentials or private URLs in recipes.
+
+A recipe records trusted acquisition provenance, permission/attribution text,
+release identity, exact byte sizes and SHA256. Mutable provider URLs can still
+disappear or change: changed bytes fail rather than becoming a different resource.
+Replace every placeholder in this example with reviewed facts:
+
+```json
+{
+  "schema": "taffish.mmseqs2.recipe.v1",
+  "id": "selected-proteins",
+  "version": "FIXED_RELEASE",
+  "source": "Official fixed release URL and attribution",
+  "license": "Applicable permission and attribution notice",
+  "files": [
+    {
+      "name": "proteins.faa.gz",
+      "url": "https://PROVIDER/FIXED_RELEASE/proteins.faa.gz",
+      "size": 123456,
+      "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_DIGITS"
+    }
+  ],
+  "createdb": {"input": "proteins.faa.gz", "dbtype": 1}
+}
+```
+
+`createdb` is optional; `dbtype` is 0 (automatic), 1 (protein) or 2 (nucleotide).
+It produces a materialized, uncompressed `reference` database (no source symlinks).
+For prebuilt sets, omit `createdb` and list **every** required flat file with its
+checksum; compatibility with upstream MMseqs remains the user's responsibility.
+For a fixed taxonomy tar archive, a file entry can add
+`"extract": ["nodes.dmp", "names.dmp", "merged.dmp", "delnodes.dmp"]`.
+Only these exact regular members are extracted; general archive trees are not accepted.
+
+### Personal and system-wide preparation
+
+Personal root:
 
 ```sh
-taf-mmseqs2 mmseqs easy-cluster sequences.fa clusterRes tmp --min-seq-id 0.5 -c 0.8 --cov-mode 1 --threads 8
-taf-mmseqs2 mmseqs easy-linclust sequences.fa linclusterRes tmp --threads 8
+DBROOT="$HOME/.local/share/taffish/databases/mmseqs2"
+mkdir -p "$DBROOT"
+chmod 755 "$DBROOT"
 ```
 
-Convert database-format search output to a tabular alignment file:
+For a site root, an administrator can create one and assign it to the installer
+account (run these as the intended installer with administrator permission):
 
 ```sh
-taf-mmseqs2 mmseqs createdb query.fa queryDB
-taf-mmseqs2 mmseqs createdb target.fa targetDB
-taf-mmseqs2 mmseqs search queryDB targetDB resultDB tmp --threads 8
-taf-mmseqs2 mmseqs convertalis queryDB targetDB resultDB result.m8
+DBROOT=/usr/local/share/taffish/databases/mmseqs2
+sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" "$DBROOT"
 ```
 
-Download one of the reference databases supported by the upstream `databases`
-workflow:
+`/opt/taffish/databases/mmseqs2` is also supported. The installer must own the
+physical root; no group/world writes. Published members are 0755/0644 so ordinary
+users can reuse them read-only. Setup requires a real writable host bind; do not
+prepare databases only in an ephemeral container.
+This is an administrator-once installation followed by read-only ordinary-user reuse.
+
+Choose **one** backend (recipe.json is in the current directory):
 
 ```sh
-taf-mmseqs2 mmseqs databases UniProtKB/Swiss-Prot swissprot tmp
-taf-mmseqs2 mmseqs easy-search query.fa swissprot result.m8 tmp --threads 8
+TAFFISH_MMSEQS2_DB_AUTO_MOUNT=0 TAFFISH_CONTAINER_BACKEND=docker \
+TAFFISH_DOCKER_RUN_ARGS="-v '$DBROOT:/db-install'" \
+taf-mmseqs2 mmseqs2-db install --recipe recipe.json --db-root /db-install --rights-reviewed --dry-run
+
+TAFFISH_MMSEQS2_DB_AUTO_MOUNT=0 TAFFISH_CONTAINER_BACKEND=podman \
+TAFFISH_PODMAN_RUN_ARGS="-v '$DBROOT:/db-install'" \
+taf-mmseqs2 mmseqs2-db install --recipe recipe.json --db-root /db-install --rights-reviewed --dry-run
+
+TAFFISH_MMSEQS2_DB_AUTO_MOUNT=0 TAFFISH_CONTAINER_BACKEND=apptainer \
+TAFFISH_APPTAINER_RUN_ARGS="--bind '$DBROOT:/db-install'" \
+taf-mmseqs2 mmseqs2-db install --recipe recipe.json --db-root /db-install --rights-reviewed --dry-run
 ```
 
-Because this is a command-mode TAFFISH tool, the first non-option argument is
-the in-container command. MMseqs2's actual executable is named `mmseqs`, so
-the clearest form is:
+Review acquisition and redistribution rights before `--rights-reviewed`.
+Replace `--dry-run` with `--source-dir sources` for already acquired files, or
+`--allow-download` for explicit HTTPS acquisition. No missing source triggers
+network access implicitly. `--reserve-gb` defaults to 10 extra GiB beyond payload
+and missing cached bytes; increase it for large database builds or archive expansion.
+The dry run reports fixed source/license, bytes, destination and intended network use.
+For an Apptainer session whose site/isolation settings omit DNS configuration,
+explicit downloads may need the additional read-only bind
+`--bind /etc/resolv.conf:/etc/resolv.conf:ro` in `TAFFISH_APPTAINER_RUN_ARGS`.
+This uses the host's existing resolver; offline analysis needs no network.
+
+Installation verifies the **entire existing visible library** before adding a
+member, holds an exclusive lock, preserves verified existing members, uses an
+owned staging directory and atomically publishes only a complete verified member.
+Same recipe and ID is an idempotent verification, not an overwrite. Rerun after
+interruption to resume a matching partial download. Corrupt/oversize partials,
+wrong identities, broken links, bad existing members or an active lock fail clearly.
+
+There is no `--force`. Inspect failures first; confirm no installer is running
+before an administrator moves the exact damaged member/partial or stale lock to
+a recoverable quarantine **outside the root**. Keep old resources and diagnostic
+evidence. Never delete a whole root or a wildcard staging directory to recover.
+
+### Discovery, reuse and manual binds
+
+Discovery order: explicit absolute `TAFFISH_MMSEQS2_DB_PATH`, personal root,
+`/usr/local/share/taffish/databases/mmseqs2`, then `/opt/taffish/databases/mmseqs2`.
+A present but invalid selected root fails; it does not fall through or download.
+Host Python 3 is required only for this verification. A valid directory symlink
+override is resolved to its physical root; broken links fail.
+All visible members, receipts, permissions and checksums must match. The verified
+root is mounted read-only at `/resources/mmseqs2`; explicitly select a member:
 
 ```sh
-taf-mmseqs2 mmseqs easy-search ...
-taf-mmseqs2 mmseqs easy-cluster ...
-taf-mmseqs2 mmseqs createdb ...
+taf-mmseqs2 mmseqs2-db list --db-root /resources/mmseqs2
+UNIT=your-recipe-id--your-version
+taf-mmseqs2 mmseqs2-db verify --db-root /resources/mmseqs2 --id "$UNIT"
+taf-mmseqs2 mmseqs easy-search query.faa "/resources/mmseqs2/$UNIT/reference" hits.tsv tmp --threads 4
 ```
 
-Do not use `taf-mmseqs2 easy-search ...` as the normal form. In command mode,
-TAFFISH will interpret `easy-search` as an executable inside the container, not
-as a subcommand of `mmseqs`.
+Disable discovery with `TAFFISH_MMSEQS2_DB_AUTO_MOUNT=0`. Manual read-only fallback:
+replace the writable setup bind with `'$DBROOT:/db:ro'` using the same Docker,
+Podman or Apptainer variable, then pass `/db/$UNIT/reference` or the selected source
+filename. Data/cache remains in the host root; analysis outputs and temporary
+files go in your writable project directory, never inside a shared member.
 
-The `--` separator is only useful for option-leading arguments to the default
-`mmseqs` command:
+Upstream `mmseqs databases` remains an **explicit, unmanaged** catalog downloader.
+Its rolling downloads are not a pinned shared-library install; acquire into a
+separate project directory, audit license/versions, and use a fixed recipe for
+shared publication. It is not an automatic resource fallback.
+For `createtaxdb`, missing local taxonomy/mapping fails before implicit fetching.
+To intentionally use the upstream rolling download behavior, explicitly pass
+`TAFFISH_MMSEQS2_ALLOW_DOWNLOAD=1` **inside the container**:
 
 ```sh
-taf-mmseqs2 -- -h
-taf-mmseqs2 -- --help
+taf-mmseqs2 env TAFFISH_MMSEQS2_ALLOW_DOWNLOAD=1 mmseqs createtaxdb targetDB tmp-tax
 ```
 
-For MMseqs2 modules such as `version`, `easy-search`, or `createdb`, use the
-explicit `taf-mmseqs2 mmseqs <module> ...` form.
+Do not use that opt-in for a repeatable scientific reference without subsequently
+recording and verifying exactly what was acquired.
 
-This README lists common usage patterns, not the full upstream manual. The
-TAFFISH wrapper calls the upstream `mmseqs` command directly, so official
-MMseqs2 modules and options are available as upstream implements them. Use
-`taf-mmseqs2 mmseqs` or the upstream user guide for the complete module list.
-Release 18 modules such as `fwbw`, `pairaln`, `taxonomyreport`, and
-`createdmptaxonomy` are available through the same `taf-mmseqs2 mmseqs ...`
-form even though they are not expanded in the common examples above.
+## Build and support boundary
 
-## Package
+Source commit `ab57c0b9cd8893f1063e391c94cc845a3179bab1`;
+source archive SHA256 `aa4e073836aa6ae7611a9aa74aedcf27817837a37322e77c522348410f18ef7c`.
+The [Dockerfile](docker/Dockerfile) fixes source/base identities and applies only the
+published HTML patch. The dependency-free upstream BlockAligner C API crate is
+built offline. Compilers are excluded from the final image. Package inventories,
+CMake configuration and patch are retained under `/opt/mmseqs2/build-records`;
+upstream notices, examples, matrices, utilities and guide remain under
+`/opt/mmseqs2`. The official fixed ARM64 archive supplies documentation only;
+its unpatched executable is not installed.
 
-```text
-name: mmseqs2
-command: taf-mmseqs2
-version: 18-r3
-kind: tool
-image: ghcr.io/taffish/mmseqs2:18-r3
-upstream release: 18-8cc5c
-upstream binary commit: 8cc5ce367b5638c4306c2d7cfc652dd099a4643f
-```
+amd64 retains AVX2 → SSE4.1 → SSE2 runtime dispatch; arm64 uses the native build.
+Docker/Podman select the native image; Apptainer uses the same candidate's read-only
+SIF on x86_64 Linux. Set `TAFFISH_CONTAINER_BACKEND=docker|podman|apptainer`.
+CPU/OpenMP is supported; CUDA/ROCm/Metal, MPI and 64-bit database IDs are not enabled.
+The companion server/desktop app and production-sized reference catalogs are
+outside this packaging acceptance. Tiny synthetic tests verify functionality,
+not biological accuracy or production capacity.
 
-## Container
+Source/base hashes do not freeze rolling Alpine indexes, package availability or
+upstream download hosting. Drift is documented at installation points; never
+silently replace a failed checksum. Packaging is Apache-2.0; MMseqs2 is MIT and
+vendored dependencies retain their own notices. Cite the relevant upstream
+papers listed in `taffish.toml`; the 2025 GPU paper is not a claim of GPU support.
 
-The container image is built from `docker/Dockerfile`. It starts from
-`alpine:3.20`, downloads official static MMseqs2 release binaries from GitHub,
-and verifies every downloaded archive with the upstream GitHub release sha256
-digests. Release `18-r3` keeps the same upstream MMseqs2 release as `18-r1`,
-but rebuilds the runtime layer on Alpine to reduce image size after confirming
-that the official binaries do not need glibc dynamic libraries.
+## Packaging validation
 
-For `linux/amd64`, the image installs the official `sse2`, `sse41`, and `avx2`
-CPU binaries. The `/usr/local/bin/mmseqs` launcher selects the fastest
-available binary at runtime based on `/proc/cpuinfo`, falling back to SSE2 on
-older CPUs.
+The 19-r1 candidate was built natively for amd64 and arm64. Native ARM64
+Docker/Podman and x86_64 Linux Docker/Podman/Apptainer passed independent offline
+manifest checks and actual wrapper workflows. Docker/Podman also passed the
+same checks with a read-only root filesystem and an ordinary UID.
+The final images occupy 98,522,688 bytes (arm64, approximately 94.0 MiB) and
+124,263,785 bytes (amd64, approximately 118.5 MiB), uncompressed engine size;
+this is not a registry download-size claim.
+Package-index caches and build-only tools are excluded. The amd64 image is
+approximately 37.6 MiB larger than 18-r3, primarily from the verified resource
+helper's Python runtime and the current native executable/runtime set.
 
-For `linux/arm64`, the image installs the official `mmseqs-linux-arm64`
-binary. The upstream matrices, examples, README, license, bash-completion
-script, and user guide are kept under `/opt/mmseqs2`.
-
-The image includes these user-facing commands and runtime tools:
-
-```text
-mmseqs
-bash
-gawk
-grep
-curl
-wget
-xargs
-tar
-gzip
-bzip2
-xz
-```
-
-The downloader and shell tools are included because upstream workflows such as
-`mmseqs databases` and taxonomy database setup can call external download,
-archive, and text-processing utilities. This image intentionally keeps the
-lighter `curl`/`wget`/`xargs` path instead of bundling `aria2c`. The core
-search and clustering workflows are provided by the upstream `mmseqs` binary
-itself.
-
-This TAFFISH package is a CPU MMseqs2 build. Upstream release
-`18-8cc5c` also publishes GPU archives, but those CUDA-enabled binaries are
-not bundled in this image. `--gpu 1` workflows require a future GPU-specific
-TAFFISH app or a custom image with the upstream GPU binary and backend GPU
-runtime options.
-
-The official precompiled static binaries do not include MPI support. Use a
-custom MPI build if you need the upstream multi-node `RUNNER=mpirun ...`
-execution mode.
-
-The image is built and validated for:
-
-```text
-linux/amd64
-linux/arm64
-```
-
-The TAFFISH metadata declares a Docker smoke check:
-
-```text
-exist: mmseqs, bash, gawk, grep, curl, wget, xargs, tar, gzip, bzip2, xz
-test:  mmseqs version reports the pinned upstream binary commit
-test:  bundled CPU-specific binary variants report the pinned commit
-test:  top-level MMseqs2 help is available
-test:  easy-search, createdb, and databases help surfaces are available
-test:  selected release 18 and taxonomy-related module help surfaces are available
-test:  shell runtime is usable
-test:  createdb accepts gzip and bzip2 FASTA inputs
-test:  a tiny easy-search produces a tabular hit
-test:  a tiny easy-cluster produces a cluster TSV
-test:  tiny easy-linclust and easy-rbh workflows run
-test:  createdb, search, convertalis, createtsv, and convert2fasta run as a DB workflow
-```
-
-During TAFFISH Hub indexing, this smoke metadata verifies that the published
-image exposes the expected command surface, reports the pinned upstream binary
-commit, includes the helper runtime tools needed by upstream workflows, and
-can run representative local sequence search and clustering tasks. It does not
-download remote databases or exhaustively validate every MMseqs2 module.
-
-Each smoke command is self-contained because the public index runs every
-`[smoke].test` entry in a fresh temporary container. No smoke entry depends on
-files created by an earlier entry.
-
-## Upstream
-
-- Project: MMseqs2
-- Source: <https://github.com/soedinglab/MMseqs2>
-- Release: <https://github.com/soedinglab/MMseqs2/releases/tag/18-8cc5c>
-- Upstream license: MIT
-- Citation:
-  - Steinegger and Soeding 2017, DOI: `10.1038/nbt.3988`
-  - Steinegger and Soeding 2018, DOI: `10.1038/s41467-018-04964-5`
-  - Mirdita et al. 2019, DOI: `10.1093/bioinformatics/bty1057`
-  - Mirdita et al. 2021, DOI: `10.1093/bioinformatics/btab184`
-  - Kallenborn et al. 2024, DOI: `10.1101/2024.11.13.623350`
-
-## Maintainer Notes
-
-Useful checks before publishing:
-
-```sh
-taf check
-taf compile -- mmseqs version
-taf publish --release --dry-run
-docker build -t ghcr.io/taffish/mmseqs2:18-r3 -f docker/Dockerfile .
-docker build --platform linux/amd64 -t ghcr.io/taffish/mmseqs2:18-r3-amd64-test -f docker/Dockerfile .
-docker build --platform linux/arm64 -t ghcr.io/taffish/mmseqs2:18-r3-arm64-test -f docker/Dockerfile .
-docker run --rm ghcr.io/taffish/mmseqs2:18-r3 mmseqs version
-docker run --rm ghcr.io/taffish/mmseqs2:18-r3 mmseqs easy-search
-```
-
-The repository wrapper files are licensed under Apache-2.0. Upstream MMseqs2
-is distributed under the MIT license, and bundled third-party components
-remain under their own upstream licenses.
+Synthetic tests cover protein/nucleotide outputs, both Linclust generations,
+Cluster2, proteome workflows, taxonomy, HTML labels, resource corruption,
+interruption/recovery/idempotence, and read-only mounts. Ordinary search,
+clustering, nucleotide TSV and alignment HTML matched the fixed official ARM64
+executable byte-for-byte. The three offline report files were also opened
+directly and accepted by the maintainer. No production catalog, real site-wide
+database installation, biological accuracy or production capacity is certified.

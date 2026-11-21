@@ -1,97 +1,70 @@
-FROM alpine:3.20
-
-ARG MMSEQS2_TAG=18-8cc5c
+# Source, release documentation and the base image are content-pinned. Alpine
+# branch repositories are rolling: packages may be replaced or removed later.
+# A successful build records today's dependencies, not perpetual byte identity.
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS build
 ARG TARGETARCH
+ARG BUILD_JOBS=2
+RUN apk add --no-cache build-base cmake ninja cargo rust zlib-dev bzip2-dev curl ca-certificates patch
+WORKDIR /build
+RUN curl --fail --location --retry 5 --retry-all-errors \
+      https://codeload.github.com/soedinglab/MMseqs2/tar.gz/ab57c0b9cd8893f1063e391c94cc845a3179bab1 -o source.tar.gz \
+ && echo 'aa4e073836aa6ae7611a9aa74aedcf27817837a37322e77c522348410f18ef7c  source.tar.gz' | sha256sum -c - \
+ && mkdir source && tar -xzf source.tar.gz --strip-components=1 -C source
+COPY docker/patches/html-escape.patch /build/html-escape.patch
+RUN cd source && patch --batch --fuzz=0 -p1 < /build/html-escape.patch
+# Build the upstream dependency-free C API crate offline; never resolve the
+# unrelated Rust development/test dependencies from its parent Cargo.toml.
+RUN set -eu; \
+    case "$TARGETARCH" in amd64) variants='sse2 sse41 avx2';; arm64) variants=arm64;; *) exit 64;; esac; \
+    mkdir -p /out/bin /out/build-records; \
+    apk info -vv > /out/build-records/build-packages.txt; \
+    for variant in $variants; do \
+      case "$variant" in sse2) simd=SSE2;; sse41) simd=SSE4_1;; avx2) simd=AVX2;; arm64) simd=ARM8;; esac; \
+      cmake -S source -B "build-$variant" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DNATIVE_ARCH=0 "-DHAVE_$simd=1" \
+        -DHAVE_TESTS=0 -DENABLE_WERROR=0 -DENABLE_CUDA=0 \
+        -DVERSION_OVERRIDE=ab57c0b9cd8893f1063e391c94cc845a3179bab1; \
+      cmake --build "build-$variant" --parallel "$BUILD_JOBS"; \
+      cp "build-$variant/src/mmseqs" "/out/bin/mmseqs_$variant"; \
+      strip "/out/bin/mmseqs_$variant"; \
+      cp "build-$variant/CMakeCache.txt" "/out/build-records/CMakeCache-$variant.txt"; \
+    done
+# The fixed official release supplies architecture-independent documentation,
+# examples, matrices and utilities. Its unpatched executable is not installed.
+RUN curl --fail --location --retry 5 --retry-all-errors \
+      https://github.com/soedinglab/MMseqs2/releases/download/19-ab57c/mmseqs-linux-arm64.tar.gz -o documentation.tar.gz \
+ && echo '7319704b3eeb8e3e92fe0016afa55eb7e9d5d839d4a598fcd3bfafb5e8664f2c  documentation.tar.gz' | sha256sum -c - \
+ && mkdir documentation && tar -xzf documentation.tar.gz -C documentation \
+ && cp -a documentation/mmseqs/LICENSE.md documentation/mmseqs/README.md documentation/mmseqs/examples \
+      documentation/mmseqs/matrices documentation/mmseqs/userguide.pdf documentation/mmseqs/util /out/ \
+ && cp /build/html-escape.patch /out/build-records/ \
+ && find source/lib -iname '*license*' -o -iname '*copying*' | sort > /out/build-records/license-paths.txt \
+ && mkdir /out/third-party-licenses \
+ && while read -r name; do \
+      if test -f "$name"; then mkdir -p "/out/third-party-licenses/$(dirname "$name")"; cp "$name" "/out/third-party-licenses/$name" || exit 1; fi; \
+    done < /out/build-records/license-paths.txt
 
-ENV MMSEQS_HOME=/opt/mmseqs2
-ENV PATH=/usr/local/bin:/opt/mmseqs2/bin:${PATH}
-
-RUN set -eux; \
-    apk add --no-cache \
-      bash \
-      bzip2 \
-      ca-certificates \
-      curl \
-      gawk \
-      grep \
-      gzip \
-      tar \
-      xz
-
-WORKDIR /root
-
-RUN set -eux; \
-    arch="${TARGETARCH:-$(uname -m)}"; \
-    download_dir="/tmp/mmseqs2-download"; \
-    mkdir -p "${download_dir}" "${MMSEQS_HOME}"; \
-    cd "${download_dir}"; \
-    base_url="https://github.com/soedinglab/MMseqs2/releases/download/${MMSEQS2_TAG}"; \
-    if [ "${arch}" = "amd64" ] || [ "${arch}" = "x86_64" ]; then \
-      curl --retry 5 --retry-delay 2 --retry-all-errors -fL "${base_url}/mmseqs-linux-sse2.tar.gz" -o mmseqs-linux-sse2.tar.gz; \
-      echo "7f660ed8257adec1ddce885bb8a6acbe6acd703692146825e9fa9e9be06902af  mmseqs-linux-sse2.tar.gz" | sha256sum -c -; \
-      tar -xzf mmseqs-linux-sse2.tar.gz; \
-      cp -a mmseqs/. "${MMSEQS_HOME}/"; \
-      cp mmseqs/bin/mmseqs "${MMSEQS_HOME}/bin/mmseqs_sse2"; \
-      chmod 0755 "${MMSEQS_HOME}/bin/mmseqs_sse2"; \
-      rm -rf mmseqs; \
-      curl --retry 5 --retry-delay 2 --retry-all-errors -fL "${base_url}/mmseqs-linux-sse41.tar.gz" -o mmseqs-linux-sse41.tar.gz; \
-      echo "0ece6a6af8f5d198bccabc98cb5fddfc9212ce04bb332e486bfdcc468c0d7b08  mmseqs-linux-sse41.tar.gz" | sha256sum -c -; \
-      tar -xzf mmseqs-linux-sse41.tar.gz; \
-      cp mmseqs/bin/mmseqs "${MMSEQS_HOME}/bin/mmseqs_sse41"; \
-      chmod 0755 "${MMSEQS_HOME}/bin/mmseqs_sse41"; \
-      rm -rf mmseqs; \
-      curl --retry 5 --retry-delay 2 --retry-all-errors -fL "${base_url}/mmseqs-linux-avx2.tar.gz" -o mmseqs-linux-avx2.tar.gz; \
-      echo "bd9b0234da5949ad528d5b5f9ea4cda9c1e23dce14b46c0791d4d919a76e61ce  mmseqs-linux-avx2.tar.gz" | sha256sum -c -; \
-      tar -xzf mmseqs-linux-avx2.tar.gz; \
-      cp mmseqs/bin/mmseqs "${MMSEQS_HOME}/bin/mmseqs_avx2"; \
-      chmod 0755 "${MMSEQS_HOME}/bin/mmseqs_avx2"; \
-      rm -rf mmseqs; \
-    elif [ "${arch}" = "arm64" ] || [ "${arch}" = "aarch64" ]; then \
-      curl --retry 5 --retry-delay 2 --retry-all-errors -fL "${base_url}/mmseqs-linux-arm64.tar.gz" -o mmseqs-linux-arm64.tar.gz; \
-      echo "06c9a031331562e37eed3da79ef859d30a1a3ac5c5e334411dfaee5da5e9c0d0  mmseqs-linux-arm64.tar.gz" | sha256sum -c -; \
-      tar -xzf mmseqs-linux-arm64.tar.gz; \
-      cp -a mmseqs/. "${MMSEQS_HOME}/"; \
-      cp mmseqs/bin/mmseqs "${MMSEQS_HOME}/bin/mmseqs_arm64"; \
-      chmod 0755 "${MMSEQS_HOME}/bin/mmseqs_arm64"; \
-      rm -rf mmseqs; \
-    else \
-      echo "Unsupported TARGETARCH: ${arch}" >&2; \
-      exit 1; \
-    fi; \
-    printf '%s\n' \
-      '#!/bin/sh' \
-      'arch="$(uname -m)"' \
-      '' \
-      'case "${arch}" in' \
-      '  aarch64|arm64)' \
-      '    binary="/opt/mmseqs2/bin/mmseqs_arm64"' \
-      '    ;;' \
-      '  x86_64|amd64)' \
-      '    flags=""' \
-      '    if [ -r /proc/cpuinfo ]; then' \
-      '      flags="$(grep -m 1 "^flags" /proc/cpuinfo || true)"' \
-      '    fi' \
-      '    case "${flags}" in' \
-      '      *avx2*) binary="/opt/mmseqs2/bin/mmseqs_avx2" ;;' \
-      '      *sse4_1*) binary="/opt/mmseqs2/bin/mmseqs_sse41" ;;' \
-      '      *) binary="/opt/mmseqs2/bin/mmseqs_sse2" ;;' \
-      '    esac' \
-      '    ;;' \
-      '  *)' \
-      '    echo "Unsupported runtime architecture: ${arch}" >&2' \
-      '    exit 1' \
-      '    ;;' \
-      'esac' \
-      '' \
-      'exec "${binary}" "$@"' \
-      > /usr/local/bin/mmseqs; \
-    chmod 0755 /usr/local/bin/mmseqs; \
-    ln -sf /usr/local/bin/mmseqs "${MMSEQS_HOME}/bin/mmseqs"; \
-    rm -rf "${download_dir}"
-
-RUN mmseqs version | grep -Fx "8cc5ce367b5638c4306c2d7cfc652dd099a4643f" >/dev/null \
- && mmseqs 2>&1 | grep -F "MMseqs2 Version: 8cc5ce367b5638c4306c2d7cfc652dd099a4643f" >/dev/null \
- && mmseqs easy-search 2>&1 | grep -F "usage: mmseqs easy-search" >/dev/null
-
-ENV TAFFISH_ENV=TAFFISH
-ENV TAFFISH_NAME=mmseqs2
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+# Runtime branch packages also drift; do not claim the base digest locks apk.
+RUN apk add --no-cache bash bzip2 ca-certificates curl gawk grep gzip tar xz python3 libstdc++ libgomp libatomic zlib \
+ && mkdir -p /opt/mmseqs2/build-records \
+ && apk info -vv > /opt/mmseqs2/build-records/runtime-packages.txt \
+ && find /var/cache/apk -maxdepth 1 -type f -name 'APKINDEX.*.tar.gz' -delete
+COPY --from=build /out/ /opt/mmseqs2/
+COPY docker/mmseqs /usr/local/bin/mmseqs
+COPY docker/mmseqs2-db.py /usr/local/bin/mmseqs2-db
+COPY docker/mmseqs2_transaction.py src/mmseqs2_validation.py /usr/local/bin/
+COPY docker/check-taxonomy-inputs.py /opt/mmseqs2/check-taxonomy-inputs.py
+COPY docker/smoke.py /opt/mmseqs2/smoke.py
+ENV MMSEQS_HOME=/opt/mmseqs2 \
+    PATH=/usr/local/bin:/opt/mmseqs2/bin:$PATH \
+    TAFFISH_ENV=TAFFISH \
+    TAFFISH_NAME=mmseqs2
+RUN chmod 755 /usr/local/bin/mmseqs /usr/local/bin/mmseqs2-db \
+ && ln -s /usr/local/bin/mmseqs /opt/mmseqs2/bin/mmseqs \
+ && mmseqs version > /tmp/mmseqs-version \
+ && grep -Fx ab57c0b9cd8893f1063e391c94cc845a3179bab1 /tmp/mmseqs-version \
+ && test -r /opt/mmseqs2/userguide.pdf \
+ && rm -f /tmp/mmseqs-version
+# Functional, permissions, HTML and resource tests run outside image assembly.
+WORKDIR /work

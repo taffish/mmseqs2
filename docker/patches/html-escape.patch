@@ -1,0 +1,96 @@
+--- a/src/util/convertalignments.cpp
++++ b/src/util/convertalignments.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include <map>
+ #include <set>
++#include "HtmlJson.h"
+ 
+ #ifdef OPENMP
+ #include <omp.h>
+@@ -384,13 +385,9 @@
+             }
+ 
+             if (format == Parameters::FORMAT_ALIGNMENT_HTML) {
+-                const char* jsStart = "{\"query\": {\"accession\": \"%s\",\"sequence\": \"";
+-                int count = snprintf(buffer, sizeof(buffer), jsStart, queryId.c_str(), querySeqData);
+-                if (count < 0 || static_cast<size_t>(count) >= sizeof(buffer)) {
+-                    Debug(Debug::WARNING) << "Truncated line in entry" << i << "!\n";
+-                    continue;
+-                }
+-                result.append(buffer, count);
++                result.append("{\"query\": {\"accession\": \"");
++                result.append(escapeHtmlJsonString(queryId));
++                result.append("\",\"sequence\": \"");
+                 if (queryProfile) {
+                     result.append(queryProfData);
+                 } else {
+@@ -765,9 +762,9 @@
+                         break;
+                     }
+                     case Parameters::FORMAT_ALIGNMENT_HTML: {
+-                        const char* jsAln = "{\"target\": \"%s\", \"seqId\": %1.3f, \"alnLen\": %d, \"mismatch\": %d, \"gapopen\": %d, \"qStartPos\": %d, \"qEndPos\": %d, \"dbStartPos\": %d, \"dbEndPos\": %d, \"eval\": %.2E, \"score\": %d, \"qLen\": %d, \"dbLen\": %d, \"qAln\": \"";
++                        const char* jsAln = "\", \"seqId\": %1.3f, \"alnLen\": %d, \"mismatch\": %d, \"gapopen\": %d, \"qStartPos\": %d, \"qEndPos\": %d, \"dbStartPos\": %d, \"dbEndPos\": %d, \"eval\": %.2E, \"score\": %d, \"qLen\": %d, \"dbLen\": %d, \"qAln\": \"";
+                         int count = snprintf(buffer, sizeof(buffer), jsAln,
+-                                             targetId.c_str(), res.seqId, alnLen,
++                                             res.seqId, alnLen,
+                                              missMatchCount, gapOpenCount,
+                                              res.qStartPos + 1, res.qEndPos + 1,
+                                              res.dbStartPos + 1, res.dbEndPos + 1,
+@@ -778,6 +775,8 @@
+                             Debug(Debug::WARNING) << "Truncated line in entry" << i << "!\n";
+                             continue;
+                         }
++                        result.append("{\"target\": \"");
++                        result.append(escapeHtmlJsonString(targetId));
+                         result.append(buffer, count);
+                         if (queryProfile) {
+                             printSeqBasedOnAln(result, queryProfData.c_str(), res.qStartPos,
+--- /dev/null
++++ b/src/util/HtmlJson.h
+@@ -0,0 +1,31 @@
++#ifndef MMSEQS_HTML_JSON_H
++#define MMSEQS_HTML_JSON_H
++#include <string>
++
++// Encode a JSON string embedded in an HTML script, without changing its value.
++inline std::string escapeHtmlJsonString(const std::string &input) {
++    const char hex[] = "0123456789abcdef";
++    std::string out;
++    out.reserve(input.size());
++    for (size_t i = 0; i < input.size(); ++i) {
++        const unsigned char c = static_cast<unsigned char>(input[i]);
++        if (c == '"' || c == '\\') {
++            out.push_back('\\');
++            out.push_back(c);
++        } else if (c < 0x20 || c == '<' || c == '>' || c == '&') {
++            out.append("\\u00");
++            out.push_back(hex[c >> 4]);
++            out.push_back(hex[c & 15]);
++        } else if (c == 0xe2 && i + 2 < input.size() &&
++                   static_cast<unsigned char>(input[i + 1]) == 0x80 &&
++                   (static_cast<unsigned char>(input[i + 2]) == 0xa8 ||
++                    static_cast<unsigned char>(input[i + 2]) == 0xa9)) {
++            out.append(static_cast<unsigned char>(input[i + 2]) == 0xa8 ? "\\u2028" : "\\u2029");
++            i += 2;
++        } else {
++            out.push_back(c);
++        }
++    }
++    return out;
++}
++#endif
+--- a/src/taxonomy/taxonomyreport.cpp
++++ b/src/taxonomy/taxonomyreport.cpp
+@@ -126,8 +126,9 @@
+         }
+         const TaxonNode *taxon = taxDB.taxonNode(taxID);
+         std::string escapedName = escapeAttribute(taxDB.getString(taxon->nameIdx));
+-        len = snprintf(buffer, sizeof(buffer), "<node name=\"%s\"><magnitude><val>%d</val></magnitude>", escapedName.c_str(), cladeCount);
+-        writer.writeAdd(buffer, static_cast<size_t>(len), thread_idx);
++        const std::string opening = "<node name=\"" + escapedName +
++                "\"><magnitude><val>" + std::to_string(cladeCount) + "</val></magnitude>";
++        writer.writeAdd(opening.data(), opening.size(), thread_idx);
+         std::vector<TaxID> children = it->second.children;
+         SORT_SERIAL(children.begin(), children.end(), [&](int a, int b) { return cladeCountVal(cladeCounts, a) > cladeCountVal(cladeCounts, b); });
+         for (size_t i = 0; i < children.size(); ++i) {

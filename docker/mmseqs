@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+if [ "${1-}" = createtaxdb ]; then
+  (shift; python3 /opt/mmseqs2/check-taxonomy-inputs.py "$@")
+fi
+case "$(uname -m)" in
+  aarch64|arm64) binary=/opt/mmseqs2/bin/mmseqs_arm64 ;;
+  x86_64|amd64)
+    flags=$(grep -m 1 '^flags' /proc/cpuinfo || true)
+    case " $flags " in
+      *' avx2 '*) binary=/opt/mmseqs2/bin/mmseqs_avx2 ;;
+      *' sse4_1 '*) binary=/opt/mmseqs2/bin/mmseqs_sse41 ;;
+      *) binary=/opt/mmseqs2/bin/mmseqs_sse2 ;;
+    esac ;;
+  *) printf >&2 'Unsupported runtime architecture\n'; exit 64 ;;
+esac
+exec "$binary" "$@"
