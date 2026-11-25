@@ -1,8 +1,8 @@
 # taf-mmseqs2
 
-[MMseqs2 Release 19](https://github.com/soedinglab/MMseqs2/releases/tag/19-ab57c)
-for TAFFISH: tool `mmseqs`, wrapper `taf-mmseqs2`, package `19-r1`,
-image `ghcr.io/taffish/mmseqs2:19-r1`. CPU Linux amd64 and arm64.
+[MMseqs2 Release 20](https://github.com/soedinglab/MMseqs2/releases/tag/20-ae60e)
+for TAFFISH: tool `mmseqs`, wrapper `taf-mmseqs2`, package `20-r1`,
+image `ghcr.io/taffish/mmseqs2:20-r1`. CPU Linux amd64 and arm64.
 The optional `mmseqs2-db` helper prepares independently versioned shared references;
 ordinary local analysis does not need a shared library.
 
@@ -12,7 +12,7 @@ After publication:
 
 ```sh
 taf update
-taf install mmseqs2 19-r1
+taf install mmseqs2 20-r1
 taf-mmseqs2 --help
 taf-mmseqs2 --version
 taf-mmseqs2 mmseqs version
@@ -53,9 +53,14 @@ arguments containing whitespace; outer shell quotes alone are not enough:
 taf-mmseqs2 mmseqs easy-search "'query 1.faa'" "'target 1.faa'" "'hits 1.tsv'" "'tmp 1'" --threads 4
 ```
 
-## Release 19 changes and compatibility
+## Release 20 changes and compatibility
 
-Protein Linclust now defaults to upstream Linclust2. Results can differ from
+Release 20 fixes missing-partner rows from `pairaln` when exported with
+`result2msa`: a dummy partner is an all-gap row instead of a spurious first
+character followed by gaps. This is the upstream fix, not a TAFFISH algorithm
+patch. The rest of the official source is unchanged from Release 19.
+
+Since Release 19, protein Linclust defaults to upstream Linclust2. Results can differ from
 Release 18; use `--linclust-version 1` for the old algorithm. Nucleotide
 Linclust still uses version 1. Release 19 adds `cluster --cluster-version 2`,
 `easy-proteomecluster` / `easy-proteomesearch`, consensus representatives and BLAST database
@@ -78,11 +83,12 @@ Open the alignment HTML or taxonomy Krona HTML in the **host browser**.
 The upstream taxonomy workflow names its report `classification_report` without
 an extension; the copy above gives the unchanged page a browser-friendly name.
 These are upstream-generated static visualizations with bundled assets, not a
-new TAFFISH report service. No port or GUI server is started. The independent
+new TAFFISH report service. Narrow windows may require horizontal scrolling for
+long alignment graphics or sequences. No port or GUI server is started. The independent
 [MMseqs2-App](https://github.com/soedinglab/MMseqs2-App) web/desktop companion is
 not called by these CLI workflows and is not included.
 
-The official Release 19 alignment exporter inserts sequence IDs into JavaScript
+The official Release 20 alignment exporter still inserts sequence IDs into JavaScript
 without escaping. A quote can break the page and a script-ending name can inject
 markup. This build applies the reviewed [HTML-only patch](docker/patches/html-escape.patch):
 query and target names receive JSON/HTML-script encoding; long names are appended
@@ -199,6 +205,9 @@ owned staging directory and atomically publishes only a complete verified member
 Same recipe and ID is an idempotent verification, not an overwrite. Rerun after
 interruption to resume a matching partial download. Corrupt/oversize partials,
 wrong identities, broken links, bad existing members or an active lock fail clearly.
+Cache retirement checks the original directory and file identities and does not
+follow a replaced parent. A retirement failure is reported even if the member
+has already been published; that complete member and diagnostic cache are retained.
 
 There is no `--force`. Inspect failures first; confirm no installer is running
 before an administrator moves the exact damaged member/partial or stale lock to
@@ -245,8 +254,8 @@ recording and verifying exactly what was acquired.
 
 ## Build and support boundary
 
-Source commit `ab57c0b9cd8893f1063e391c94cc845a3179bab1`;
-source archive SHA256 `aa4e073836aa6ae7611a9aa74aedcf27817837a37322e77c522348410f18ef7c`.
+Source commit `ae60ef6964f3de689139bcfe290d9fad18f70b06`;
+source archive SHA256 `e15e9935e0ae3aebfd476e585a565cf309b0c0e0ec610abe2e87254470930883`.
 The [Dockerfile](docker/Dockerfile) fixes source/base identities and applies only the
 published HTML patch. The dependency-free upstream BlockAligner C API crate is
 built offline. Compilers are excluded from the final image. Package inventories,
@@ -271,21 +280,18 @@ papers listed in `taffish.toml`; the 2025 GPU paper is not a claim of GPU suppor
 
 ## Packaging validation
 
-The 19-r1 candidate was built natively for amd64 and arm64. Native ARM64
-Docker/Podman and x86_64 Linux Docker/Podman/Apptainer passed independent offline
-manifest checks and actual wrapper workflows. Docker/Podman also passed the
-same checks with a read-only root filesystem and an ordinary UID.
-The final images occupy 98,522,688 bytes (arm64, approximately 94.0 MiB) and
-124,263,785 bytes (amd64, approximately 118.5 MiB), uncompressed engine size;
-this is not a registry download-size claim.
-Package-index caches and build-only tools are excluded. The amd64 image is
-approximately 37.6 MiB larger than 18-r3, primarily from the verified resource
-helper's Python runtime and the current native executable/runtime set.
+The 20-r1 candidate passed native builds and runtime validation on ARM64
+Docker/Podman and x86_64 Docker/Podman/Apptainer (the actual read-only SIF).
+The checks cover declared offline commands, ordinary-user read-only operation,
+actual wrappers, paired-MSA missing partners, resource failure/recovery/idempotence,
+parent-link-safe cache retirement and read-only shared reuse. Native offline
+reports were generated again; browser interactions and narrow windows were checked.
+Their bytes match the previously verified directly opened offline pages.
 
-Synthetic tests cover protein/nucleotide outputs, both Linclust generations,
-Cluster2, proteome workflows, taxonomy, HTML labels, resource corruption,
-interruption/recovery/idempotence, and read-only mounts. Ordinary search,
-clustering, nucleotide TSV and alignment HTML matched the fixed official ARM64
-executable byte-for-byte. The three offline report files were also opened
-directly and accepted by the maintainer. No production catalog, real site-wide
-database installation, biological accuracy or production capacity is certified.
+Final local uncompressed image sizes are 98,528,134 bytes (ARM64) and
+124,269,231 bytes (amd64), 5,446 bytes more than 19-r1 on each architecture.
+Compiler/build trees and package indexes are excluded; the runtime includes the
+resource helper's Python, native programs, documentation and license notices.
+These are engine image sizes, not registry download sizes. No production catalog,
+real site-wide database installation, biological accuracy or production capacity
+is certified. Publication and public CI/registry/Index verification are separate.

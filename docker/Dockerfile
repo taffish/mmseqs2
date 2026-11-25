@@ -7,8 +7,8 @@ ARG BUILD_JOBS=2
 RUN apk add --no-cache build-base cmake ninja cargo rust zlib-dev bzip2-dev curl ca-certificates patch
 WORKDIR /build
 RUN curl --fail --location --retry 5 --retry-all-errors \
-      https://codeload.github.com/soedinglab/MMseqs2/tar.gz/ab57c0b9cd8893f1063e391c94cc845a3179bab1 -o source.tar.gz \
- && echo 'aa4e073836aa6ae7611a9aa74aedcf27817837a37322e77c522348410f18ef7c  source.tar.gz' | sha256sum -c - \
+      https://codeload.github.com/soedinglab/MMseqs2/tar.gz/ae60ef6964f3de689139bcfe290d9fad18f70b06 -o source.tar.gz \
+ && echo 'e15e9935e0ae3aebfd476e585a565cf309b0c0e0ec610abe2e87254470930883  source.tar.gz' | sha256sum -c - \
  && mkdir source && tar -xzf source.tar.gz --strip-components=1 -C source
 COPY docker/patches/html-escape.patch /build/html-escape.patch
 RUN cd source && patch --batch --fuzz=0 -p1 < /build/html-escape.patch
@@ -23,7 +23,7 @@ RUN set -eu; \
       cmake -S source -B "build-$variant" -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DNATIVE_ARCH=0 "-DHAVE_$simd=1" \
         -DHAVE_TESTS=0 -DENABLE_WERROR=0 -DENABLE_CUDA=0 \
-        -DVERSION_OVERRIDE=ab57c0b9cd8893f1063e391c94cc845a3179bab1; \
+        -DVERSION_OVERRIDE=ae60ef6964f3de689139bcfe290d9fad18f70b06; \
       cmake --build "build-$variant" --parallel "$BUILD_JOBS"; \
       cp "build-$variant/src/mmseqs" "/out/bin/mmseqs_$variant"; \
       strip "/out/bin/mmseqs_$variant"; \
@@ -32,8 +32,8 @@ RUN set -eu; \
 # The fixed official release supplies architecture-independent documentation,
 # examples, matrices and utilities. Its unpatched executable is not installed.
 RUN curl --fail --location --retry 5 --retry-all-errors \
-      https://github.com/soedinglab/MMseqs2/releases/download/19-ab57c/mmseqs-linux-arm64.tar.gz -o documentation.tar.gz \
- && echo '7319704b3eeb8e3e92fe0016afa55eb7e9d5d839d4a598fcd3bfafb5e8664f2c  documentation.tar.gz' | sha256sum -c - \
+      https://github.com/soedinglab/MMseqs2/releases/download/20-ae60e/mmseqs-linux-arm64.tar.gz -o documentation.tar.gz \
+ && echo '8bb0cb62c6583eb196a17b0b894d80b57489f48d700a258911420f8b7ad42727  documentation.tar.gz' | sha256sum -c - \
  && mkdir documentation && tar -xzf documentation.tar.gz -C documentation \
  && cp -a documentation/mmseqs/LICENSE.md documentation/mmseqs/README.md documentation/mmseqs/examples \
       documentation/mmseqs/matrices documentation/mmseqs/userguide.pdf documentation/mmseqs/util /out/ \
@@ -63,7 +63,7 @@ ENV MMSEQS_HOME=/opt/mmseqs2 \
 RUN chmod 755 /usr/local/bin/mmseqs /usr/local/bin/mmseqs2-db \
  && ln -s /usr/local/bin/mmseqs /opt/mmseqs2/bin/mmseqs \
  && mmseqs version > /tmp/mmseqs-version \
- && grep -Fx ab57c0b9cd8893f1063e391c94cc845a3179bab1 /tmp/mmseqs-version \
+ && grep -Fx ae60ef6964f3de689139bcfe290d9fad18f70b06 /tmp/mmseqs-version \
  && test -r /opt/mmseqs2/userguide.pdf \
  && rm -f /tmp/mmseqs-version
 # Functional, permissions, HTML and resource tests run outside image assembly.

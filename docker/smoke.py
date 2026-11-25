@@ -11,7 +11,7 @@ import re
 import subprocess
 import tempfile
 
-COMMIT = 'ab57c0b9cd8893f1063e391c94cc845a3179bab1'
+COMMIT = 'ae60ef6964f3de689139bcfe290d9fad18f70b06'
 SEQ = 'MKTAYIAKQRQISFVKSHFSRQDILDLWIYHTQGYFPQWDAARVGHVTKAVNQLRDRSLSAEVKAAALEHHHHHH'
 EXE = os.environ.get('MMSEQS_BINARY', 'mmseqs')
 counter = 0
@@ -60,6 +60,33 @@ def search():
     assert Path('db.tsv').stat().st_size > 0
     run('easy-rbh', 'query.fa', 'target.fa', 'rbh.tsv', 'tmp-rbh', '--threads', '1', '--prefilter-mode', '1')
     assert Path('rbh.tsv').stat().st_size > 0
+
+def paired_msa():
+    # Synthetic alignment rows isolate the missing-partner contract; the real
+    # pairaln command must create the dummy before result2msa exports it.
+    Path('query.fa').write_text(''.join(f'>chain{i}\n{SEQ}\n' for i in range(3)))
+    Path('target.fa').write_text(''.join(f'>target{i}\n{SEQ}\n' for i in range(3)))
+    for source, db in [('query.fa', 'qdb'), ('target.fa', 'tdb')]:
+        run('createdb', source, db, '--dbtype', '1', '--shuffle', '0')
+    Path('tax').mkdir()
+    Path('tax/nodes.dmp').write_text('1\t|\t1\t|\tno rank\t|\n3\t|\t1\t|\tspecies\t|\n4\t|\t1\t|\tspecies\t|\n')
+    Path('tax/names.dmp').write_text('1\t|\troot\t|\t\t|\tscientific name\t|\n3\t|\tFixture A\t|\t\t|\tscientific name\t|\n4\t|\tFixture B\t|\t\t|\tscientific name\t|\n')
+    for name in ('merged.dmp', 'delnodes.dmp'):
+        Path('tax/' + name).write_text('')
+    Path('mapping.tsv').write_text('target0\t3\ntarget1\t3\ntarget2\t4\n')
+    run('createtaxdb', 'tdb', 'tmp-tax', '--ncbi-tax-dump', 'tax', '--tax-mapping-file', 'mapping.tsv', '--threads', '1')
+    length = len(SEQ)
+    Path('alignments.tsv').write_text(''.join(
+        f'{i}\t{i}\t100\t1.000\t0.0\t0\t{length-1}\t{length}\t0\t{length-1}\t{length}\t{length}M\n'
+        for i in range(3)))
+    run('tsv2db', 'alignments.tsv', 'alignments', '--output-dbtype', '5')
+    run('pairaln', 'qdb', 'tdb', 'alignments', 'paired', '--pairing-mode', '0', '--pairing-dummy-mode', '1', '--threads', '1')
+    assert b'\t-1\t0\t0\t-1\t0\t0\t1M\n' in Path('paired').read_bytes()
+    run('result2msa', 'qdb', 'tdb', 'paired', 'paired.a3m', '--msa-format-mode', '5', '--filter-msa', '0', '--threads', '1')
+    records = Path('paired.a3m').read_bytes().replace(b'\x00', b'').decode()
+    assert records.count('>DUMMY\n' + '-' * length + '\n') == 1, records
+    assert '>target0\n' + SEQ in records and '>target1\n' + SEQ in records
+    assert '>target2\n' not in records
 
 def clustering():
     input_files()
@@ -130,7 +157,7 @@ def resources():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('case', choices=['meta', 'database', 'search', 'clustering', 'proteomes', 'html', 'taxonomy', 'resources'])
+    parser.add_argument('case', choices=['meta', 'database', 'search', 'paired_msa', 'clustering', 'proteomes', 'html', 'taxonomy', 'resources'])
     parser.add_argument('--work', type=Path)
     args = parser.parse_args()
     work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix='mmseqs-check-', dir='/tmp'))

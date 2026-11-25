@@ -1,4 +1,4 @@
-mmseqs2 19-r1
+mmseqs2 20-r1
 
 Purpose:
   Search, cluster and taxonomically classify protein or nucleotide sequences.
@@ -16,7 +16,7 @@ Inputs and outputs:
   Supply FASTA/FASTQ or a matching MMseqs database; gzip and bzip2 input are supported.
   Search writes tabular hits; clustering writes memberships and representative FASTA.
   Use fresh output and temporary paths, and allow enough RAM/disk for your dataset.
-  Protein Linclust now defaults to version 2; add --linclust-version 1 for the old algorithm.
+  Protein Linclust defaults to version 2; add --linclust-version 1 for the old algorithm.
   Paths with spaces need literal quotes: "'query 1.faa'" "'hits 1.tsv'" "'tmp 1'".
 
 Offline reports:
@@ -67,6 +67,7 @@ Read-only reuse:
   Manual fallback: use your backend's bind above with '$DBROOT:/db:ro', then read /db/$UNIT.
 
 More help:
+  https://github.com/taffish/mmseqs2#readme
   taf-mmseqs2 --help                  Wrapper help
   taf-mmseqs2 --version               Wrapper version
   taf-mmseqs2 mmseqs version          Upstream version

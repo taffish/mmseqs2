@@ -28,5 +28,5 @@ taf_mmseqs2_mount() {
     elif test "$1" = apptainer; then printf -- '--bind=%s:/resources/mmseqs2:ro' "$taf_mmseqs2_root"
     else printf -- '--volume=%s:/resources/mmseqs2:ro' "$taf_mmseqs2_root"; fi
 }
-<taf-app:container:ghcr.io/taffish/mmseqs2:19-r1$@[docker: --user=$(id -u):$(id -g) "$(taf_mmseqs2_mount docker)"][podman: --userns=keep-id --user=$(id -u):$(id -g) "$(taf_mmseqs2_mount podman)"][apptainer: "$(taf_mmseqs2_mount apptainer)"]>
+<taf-app:container:ghcr.io/taffish/mmseqs2:20-r1$@[docker: --user=$(id -u):$(id -g) "$(taf_mmseqs2_mount docker)"][podman: --userns=keep-id --user=$(id -u):$(id -g) "$(taf_mmseqs2_mount podman)"][apptainer: "$(taf_mmseqs2_mount apptainer)"]>
 mmseqs ::*ARGV*::

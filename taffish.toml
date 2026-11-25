@@ -1,7 +1,7 @@
 [package]
 name = "mmseqs2"
 kind = "tool"
-version = "19"
+version = "20"
 release = 1
 license = "Apache-2.0"
 main = "src/main.taf"
@@ -17,7 +17,7 @@ pipe = true
 command_mode = true
 
 [container]
-image = "ghcr.io/taffish/mmseqs2:19-r1"
+image = "ghcr.io/taffish/mmseqs2:20-r1"
 dockerfile = "docker/Dockerfile"
 build_platforms = "linux/amd64,linux/arm64"
 
@@ -32,9 +32,9 @@ name = "MMseqs2"
 type = "github"
 repo = "soedinglab/MMseqs2"
 homepage = "https://github.com/soedinglab/MMseqs2"
-release_url = "https://github.com/soedinglab/MMseqs2/releases/tag/19-ab57c"
-downloads = "https://codeload.github.com/soedinglab/MMseqs2/tar.gz/ab57c0b9cd8893f1063e391c94cc845a3179bab1; https://github.com/soedinglab/MMseqs2/releases/download/19-ab57c/mmseqs-linux-arm64.tar.gz"
-version = "19-ab57c"
+release_url = "https://github.com/soedinglab/MMseqs2/releases/tag/20-ae60e"
+downloads = "https://codeload.github.com/soedinglab/MMseqs2/tar.gz/ae60ef6964f3de689139bcfe290d9fad18f70b06; https://github.com/soedinglab/MMseqs2/releases/download/20-ae60e/mmseqs-linux-arm64.tar.gz"
+version = "20-ae60e"
 license = "MIT"
 citation = "Steinegger and Soeding 2017; Steinegger and Soeding 2018; Mirdita et al. 2019; Mirdita et al. 2021; Kallenborn et al. 2025"
 doi = "10.1038/nbt.3988; 10.1038/s41467-018-04964-5; 10.1093/bioinformatics/bty1057; 10.1093/bioinformatics/btab184; 10.1038/s41592-025-02819-8"
@@ -44,4 +44,4 @@ watch = "tags"
 backend = "docker"
 timeout = 300
 exist = ["mmseqs", "mmseqs2-db", "python3", "bash", "gawk", "grep", "curl", "wget", "xargs", "tar", "gzip", "bzip2", "xz"]
-test = ["python3 /opt/mmseqs2/smoke.py meta", "python3 /opt/mmseqs2/smoke.py database", "python3 /opt/mmseqs2/smoke.py search", "python3 /opt/mmseqs2/smoke.py clustering", "python3 /opt/mmseqs2/smoke.py html", "python3 /opt/mmseqs2/smoke.py taxonomy", "python3 /opt/mmseqs2/smoke.py resources"]
+test = ["python3 /opt/mmseqs2/smoke.py meta", "python3 /opt/mmseqs2/smoke.py database", "python3 /opt/mmseqs2/smoke.py search", "python3 /opt/mmseqs2/smoke.py paired_msa", "python3 /opt/mmseqs2/smoke.py clustering", "python3 /opt/mmseqs2/smoke.py html", "python3 /opt/mmseqs2/smoke.py taxonomy", "python3 /opt/mmseqs2/smoke.py resources"]

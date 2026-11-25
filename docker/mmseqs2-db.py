@@ -16,7 +16,7 @@ import tempfile
 
 from mmseqs2_validation import (canonical, directory, recipe_load, regular, require, safe_name,
                                 sha, verify, verify_root)
-from mmseqs2_transaction import SIGNALS, interrupted, owned_lock, private_directory, run_owned
+from mmseqs2_transaction import SIGNALS, interrupted, owned_lock, private_directory, run_owned, held_parent
 
 
 def install_path(root):
@@ -82,6 +82,34 @@ def obtain(item, cache, source_dir):
     return blob, True
 
 
+def retire_blobs(cache, cache_identity, created):
+    # Anchor deletion to the original directory and exact files this transaction
+    # created. A renamed/replaced parent must never redirect cleanup elsewhere.
+    if not created:
+        return
+    directory(cache, writable=True)
+    with held_parent(cache) as parent:
+        require(os.path.samestat(os.fstat(parent), cache_identity),
+                'cache directory identity changed; retained for inspection')
+        for blob, original in created.items():
+            require(blob.parent == cache, 'unexpected cache parent')
+            current = os.stat(blob.name, dir_fd=parent, follow_symlinks=False)
+            require(stat.S_ISREG(current.st_mode) and current.st_nlink == 1
+                    and os.path.samestat(current, original), 'cache file identity changed; retained')
+            with os.fdopen(os.open(blob.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent), 'rb') as stream:
+                require(os.path.samestat(os.fstat(stream.fileno()), original), 'cache file changed; retained')
+                digest = hashlib.sha256()
+                for block in iter(lambda: stream.read(8 * 1024**2), b''):
+                    digest.update(block)
+                require(digest.hexdigest() == blob.name, 'cache content changed; retained')
+            require(os.path.samestat(cache.lstat(), cache_identity), 'cache directory changed; retained')
+            require(os.path.samestat(os.stat(blob.name, dir_fd=parent, follow_symlinks=False), original),
+                    'cache file changed before retirement; retained')
+            os.unlink(blob.name, dir_fd=parent)
+            require(os.path.samestat(cache.lstat(), cache_identity),
+                    'cache directory changed during retirement; inspect retained diagnostics')
+
+
 def install(root, recipe, source_dir, reserve, threads):
     install_path(root)
     unit = recipe['id'] + '--' + recipe['version']
@@ -101,6 +129,7 @@ def install(root, recipe, source_dir, reserve, threads):
             cache.mkdir(mode=0o700)
         directory(cache, writable=True)
         require(stat.S_IMODE(cache.stat().st_mode) == 0o700, 'cache must have mode 0700')
+        cache_identity = cache.lstat()
         pending = {}
         for item in recipe['files']:
             if not (cache / item['sha256']).exists():
@@ -110,6 +139,7 @@ def install(root, recipe, source_dir, reserve, threads):
         required = sum(pending.values()) + sum(item['size'] for item in recipe['files']) + reserve
         require(shutil.disk_usage(root).free >= required, f'insufficient space: need {required} free bytes')
         blobs = [(item, obtain(item, cache, source_dir)) for item in recipe['files']]
+        created = {path: path.lstat() for _, (path, fresh) in blobs if fresh}
         with private_directory(prefix='.' + unit + '.stage-', dir=root) as stage:
             for item, (blob, _) in blobs:
                 shutil.copyfile(blob, stage / item['name'])
@@ -132,7 +162,7 @@ def install(root, recipe, source_dir, reserve, threads):
             (stage / 'recipe.json').write_bytes(canonical(recipe) + b'\n')
             (stage / 'RESOURCE_LICENSE.txt').write_text(recipe['source'] + '\n\n' + recipe['license'] + '\n')
             inventory = [dict(name=p.name, size=p.stat().st_size, sha256=sha(p)) for p in sorted(stage.iterdir())]
-            record = dict(schema='taffish.mmseqs2.db.v1', app_release='19-r1', resource=unit,
+            record = dict(schema='taffish.mmseqs2.db.v1', app_release='20-r1', resource=unit,
                           recipe_sha256=identity, files=inventory)
             (stage / 'manifest.json').write_bytes(canonical(record) + b'\n')
             (stage / 'READY').write_text(sha(stage / 'manifest.json') + '\n')
@@ -143,10 +173,7 @@ def install(root, recipe, source_dir, reserve, threads):
             command('promote', ['mv', '-T', '-n', '--', str(stage), str(destination)])
             require(not stage.exists(), 'destination appeared; refusing overwrite')
         # Retire only blobs promoted by this transaction, never an older verified cache.
-        for blob in {path for _, (path, created) in blobs if created}:
-            regular(blob)
-            require(blob.stat().st_nlink == 1 and sha(blob) == blob.name, 'cache identity changed; retained')
-            blob.unlink()
+        retire_blobs(cache, cache_identity, created)
         print('installed: ' + str(destination))
 
 
@@ -155,7 +182,7 @@ def main():
         epilog='Use an existing installer-owned private/site root. Members: 0755/0644. No --force; '
         'quarantine exact damaged members only after confirming no installer is running. '
         'Repeat network installation to resume. Always use actual writable/read-only backend binds.')
-    parser.add_argument('--version', action='version', version='mmseqs2-db 19-r1')
+    parser.add_argument('--version', action='version', version='mmseqs2-db 20-r1')
     sub = parser.add_subparsers(dest='command', required=True)
     prepare = sub.add_parser('install')
     prepare.add_argument('--recipe', required=True, type=Path)

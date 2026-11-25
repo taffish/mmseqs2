@@ -1,7 +1,7 @@
 # HTML label patch
 
 `html-escape.patch` applies to MMseqs2 commit
-`ab57c0b9cd8893f1063e391c94cc845a3179bab1` with zero fuzz.
+`ae60ef6964f3de689139bcfe290d9fad18f70b06` with zero fuzz.
 It changes only alignment HTML string encoding and bounded Krona label output,
 not sequence algorithms, TSV formatting, taxonomy assignment or counts.
 
